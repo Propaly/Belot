@@ -1,0 +1,478 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    Inter,
+    Arial,
+    sans-serif;
+  background: #071b12;
+  color: white;
+}
+
+button {
+  font: inherit;
+}
+
+.table {
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at center,
+      #197447 0,
+      #0d4c2e 45%,
+      #06180f 100%
+    );
+}
+
+.header {
+  height: 70px;
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.score {
+  display: flex;
+  gap: 30px;
+  font-size: 18px;
+}
+
+.game-area {
+  position: relative;
+  height: calc(100vh - 70px);
+  min-height: 650px;
+}
+
+.opponent {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.opponent.top {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  z-index: 2;
+}
+
+.player-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bid-slot {
+  min-width: 58px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 10px;
+  background: rgba(0,0,0,.28);
+  color: rgba(255,255,255,.65);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.bid-slot.has-bid {
+  color: #ffe082;
+  border-color: rgba(255,224,130,.55);
+  background: rgba(0,0,0,.38);
+}
+
+.opponent.left {
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.opponent.right {
+  right: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+
+.opponent.left .player-info,
+.opponent.right .player-info {
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+}
+
+.opponent.left .player-info strong,
+.opponent.right .player-info strong {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,0.15);
+}
+
+.back-cards {
+  display: flex;
+  justify-content: center;
+}
+
+.announcements {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: 290px;
+  margin: 5px auto 7px;
+}
+
+.announcement {
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 224, 130, .45);
+  border-radius: 999px;
+  background: rgba(73, 53, 16, .72);
+  color: #ffe082;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  box-shadow: 0 4px 12px rgba(0,0,0,.18);
+  white-space: nowrap;
+}
+
+.back-card {
+  width: 42px;
+  height: 60px;
+  margin-left: -12px;
+  border-radius: 6px;
+
+  display: grid;
+  place-items: center;
+
+  background: #173a78;
+  border: 2px solid white;
+  box-shadow: 0 4px 8px rgba(0,0,0,.35);
+}
+
+.vertical-cards {
+  display: flex;
+  flex-direction: column;
+}
+
+.vertical-cards .back-card {
+  margin-left: 0;
+  margin-top: -30px;
+}
+
+.center {
+  position: absolute;
+  left: 50%;
+  top: 140px;
+  bottom: 200px;
+  transform: translateX(-50%);
+  width: min(760px, 68vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.contract {
+  padding: 10px 18px;
+  border-radius: 20px;
+  background: rgba(0,0,0,.25);
+}
+
+.contract-corner {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  z-index: 3;
+  text-align: left;
+  font-size: 14px;
+}
+
+.trick {
+  position: relative;
+  width: 100%;
+  height: 230px;
+  margin: 4px 0 8px;
+}
+
+.played-card {
+  position: absolute;
+  width: 82px;
+  height: 118px;
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(145deg, #ffffff, #f2f2f2);
+  color: #111;
+  font-size: 25px;
+  font-weight: bold;
+  box-shadow: 0 10px 24px rgba(0,0,0,.42);
+  border: 2px solid rgba(255,255,255,.85);
+}
+
+/* Картата стои пред човека, както при истинска маса. */
+.played-card.seat-0 {
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+}
+
+.played-card.seat-2 {
+  left: 50%;
+  top: 3px;
+  transform: translateX(-50%) rotate(180deg);
+}
+
+.played-card.seat-1 {
+  left: 12%;
+  top: 50%;
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.played-card.seat-3 {
+  right: 12%;
+  top: 50%;
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+.message {
+  margin-top: 8px;
+  min-height: 30px;
+}
+
+.current-bid {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: normal;
+  opacity: 0.85;
+}
+
+.multiplier-badge {
+  color: #ff5252;
+  text-shadow: 0 0 8px rgba(255, 82, 82, 0.6);
+}
+
+.bid-panel {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bid-button {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.15s;
+}
+
+.bid-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.bid-history {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.player {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: min(900px, 90vw);
+}
+
+.player-name {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.player-name small {
+  color: #ffe082;
+}
+
+.hand {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.card {
+  width: 80px;
+  height: 115px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: white;
+  color: #111;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  font-size: 26px;
+  font-weight: bold;
+
+  box-shadow:
+    0 6px 15px rgba(0,0,0,.35);
+
+  transition:
+    transform .15s,
+    margin .15s;
+}
+
+.card.red {
+  color: #c62828;
+}
+
+.played-card.red {
+  color: #c62828;
+}
+
+.card.playable {
+  cursor: pointer;
+}
+
+.card.playable:hover {
+  transform: translateY(-22px);
+}
+
+.card:disabled {
+  opacity: .75;
+  cursor: default;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+
+  display: grid;
+  place-items: center;
+
+  background: rgba(0,0,0,.85);
+}
+
+.modal-content {
+  min-width: 320px;
+  padding: 35px;
+
+  border-radius: 16px;
+
+  text-align: center;
+
+  background: #10251b;
+
+  box-shadow:
+    0 20px 60px rgba(0,0,0,.6);
+}
+
+.new-game {
+  padding: 12px 25px;
+
+  border: 0;
+  border-radius: 8px;
+
+  background: #2e9d62;
+  color: white;
+
+  cursor: pointer;
+}
+
+.new-game:hover {
+  background: #39b875;
+}
+
+@media (max-width: 700px) {
+  .card {
+    width: 48px;
+    height: 75px;
+    font-size: 18px;
+  }
+
+  .played-card {
+    width: 55px;
+    height: 80px;
+    font-size: 18px;
+  }
+
+  .center {
+    width: 92vw;
+    top: 110px;
+    bottom: 175px;
+  }
+
+  .trick {
+    height: 190px;
+  }
+
+  .played-card.seat-1 { left: 8%; }
+  .played-card.seat-3 { right: 8%; }
+
+  .player {
+    width: 98vw;
+  }
+
+  .hand {
+    gap: 3px;
+  }
+
+  .opponent.left,
+  .opponent.right {
+    display: none;
+  }
+}
+.bid-stage {
+  width: 100%;
+  text-align: center;
+  font-weight: 800;
+  margin-bottom: 8px;
+  letter-spacing: .02em;
+}
+
+.room-input{width:100%;box-sizing:border-box;padding:12px 14px;margin:7px 0;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#10151c;color:#fff;font-size:16px}.divider{text-align:center;margin:8px;color:#8f9aaa}.error{color:#ff8c8c}.new-game{margin:7px;width:100%}
