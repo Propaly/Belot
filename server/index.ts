@@ -33,6 +33,18 @@ function broadcast(room: Room) {
 }
 function clientsBySeat(room: Room, seat: number) { return [...room.clients.values()].find(c => c.seat === seat); }
 
+// Избира свободно място, като първо пробва предпочитаното (и чифтовото
+// му място - същия отбор), преди да падне на което и да е друго свободно.
+// Отбор 1 = места 0 и 2, Отбор 2 = места 1 и 3.
+function pickSeat(room: Room, preferred?: number): number | undefined {
+  const used = new Set([...room.clients.values()].map(c => c.seat));
+  const candidates =
+    preferred !== undefined && preferred >= 0 && preferred <= 3
+      ? [preferred, (preferred + 2) % 4, ...[0, 1, 2, 3].filter(s => s !== preferred && s !== (preferred + 2) % 4)]
+      : [0, 1, 2, 3];
+  return candidates.find(s => !used.has(s));
+}
+
 function roomFor(ws: WebSocket) { for (const room of rooms.values()) if (room.clients.has(ws)) return room; }
 
 wss.on("connection", ws => {
@@ -42,15 +54,17 @@ wss.on("connection", ws => {
       const msg = JSON.parse(raw.toString());
       if (msg.type === "create") {
         const room: Room = { code: code(), clients: new Map(), game: deal(), started: false };
-        room.clients.set(ws, { ws, seat: 0, name: String(msg.name || "Играч 1") });
+        const seat = pickSeat(room, msg.seat) ?? 0;
+        room.clients.set(ws, { ws, seat, name: String(msg.name || "Играч 1") });
+        room.game.players[seat].name = String(msg.name || "Играч 1");
         rooms.set(room.code, room);
-        send(ws, { type: "room", code: room.code, seat: 0 }); broadcast(room); return;
+        send(ws, { type: "room", code: room.code, seat }); broadcast(room); return;
       }
       if (msg.type === "join") {
         const room = rooms.get(String(msg.code || "").toUpperCase());
         if (!room || room.clients.size >= 4) return send(ws, { type: "error", message: "Стаята е пълна или не съществува." });
-        const used = new Set([...room.clients.values()].map(c => c.seat));
-        const seat = [0,1,2,3].find(i => !used.has(i))!;
+        const seat = pickSeat(room, msg.seat);
+        if (seat === undefined) return send(ws, { type: "error", message: "Стаята е пълна." });
         room.clients.set(ws, { ws, seat, name: String(msg.name || `Играч ${seat+1}`) });
         room.game.players[seat].name = String(msg.name || `Играч ${seat+1}`);
         send(ws, { type: "room", code: room.code, seat }); broadcast(room); return;

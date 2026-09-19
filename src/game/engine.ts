@@ -96,13 +96,27 @@ export function nextPlayer(playerId: number): number {
     return (playerId + 3) % 4;
 }
 
-export function createPlayers(): Player[] {
-    return [
-        { id: 0, name: "Ти", team: 0, hand: [] },
-        { id: 1, name: "Бот 1", team: 1, hand: [] },
-        { id: 2, name: "Партньор", team: 0, hand: [] },
-        { id: 3, name: "Бот 2", team: 1, hand: [] },
-    ];
+/**
+ * Създава играчите за локален режим (срещу ботове). `humanSeat` е
+ * мястото, което истинският играч избра да заема (0-3) - това
+ * реализира избора на отбор: отбор 0 = места 0 и 2, отбор 1 = места
+ * 1 и 3. Партньорът на истинския играч винаги е mясто (humanSeat+2)%4.
+ */
+export function createPlayers(humanSeat = 0): Player[] {
+    const partnerSeat = (humanSeat + 2) % 4;
+    let botCount = 0;
+    const teamOf = (id: number): 0 | 1 => (id % 2 === 0 ? 0 : 1);
+
+    return [0, 1, 2, 3].map((id) => {
+        if (id === humanSeat) {
+            return { id, name: "Ти", team: teamOf(id), hand: [] };
+        }
+        if (id === partnerSeat) {
+            return { id, name: "Партньор", team: teamOf(id), hand: [] };
+        }
+        botCount += 1;
+        return { id, name: `Бот ${botCount}`, team: teamOf(id), hand: [] };
+    });
 }
 
 /**
@@ -114,10 +128,11 @@ export function createPlayers(): Player[] {
 export function startRound(
     dealer: number,
     score: [number, number],
-    round: number
+    round: number,
+    humanSeat = 0
 ): GameState {
     const deck = shuffle(createDeck());
-    const players = createPlayers();
+    const players = createPlayers(humanSeat);
 
     const order: number[] = [];
     let cursor = dealer;
@@ -138,6 +153,7 @@ export function startRound(
         players,
         deck,
         phase: "bidding",
+        humanSeat,
         dealer,
         biddingTurn,
         bidHistory: [],
@@ -160,8 +176,8 @@ export function startRound(
     };
 }
 
-export function deal(): GameState {
-    return startRound(0, [0, 0], 1);
+export function deal(humanSeat = 0): GameState {
+    return startRound(0, [0, 0], 1, humanSeat);
 }
 
 function finalizeBidding(state: GameState): GameState {
@@ -318,7 +334,8 @@ export function placeCall(state: GameState, call: Call, actingPlayerId?: number)
         const next = startRound(
             nextDealer,
             state.score,
-            state.round + 1
+            state.round + 1,
+            state.humanSeat
         );
         return {
             ...next,
@@ -383,7 +400,7 @@ export function botBid(state: GameState): GameState {
 
     const playerId = state.biddingTurn;
 
-    if (playerId === 0) return state;
+    if (playerId === state.humanSeat) return state;
 
     const player = state.players[playerId];
     const hand = player.hand;
@@ -484,17 +501,18 @@ function cardStrength(card: Card, contract: Contract): number {
     return NORMAL_ORDER[card.rank];
 }
 
-// Ред на показване на цветовете в ръката: спатия -> каро -> купа -> пика.
+// Ред на показване на цветовете в ръката: спатия -> каро -> пика -> купа
+// (черно, червено, черно, червено - за по-лесна визуална различимост).
 const SUIT_DISPLAY_ORDER: Record<Suit, number> = {
     "♣": 0,
     "♦": 1,
-    "♥": 2,
-    "♠": 3,
+    "♠": 2,
+    "♥": 3,
 };
 
 /**
- * Подрежда карти за визуализация: първо по цвят (спатия, каро, купа,
- * пика), а вътре във всеки цвят - по сила, от най-силна към най-слаба,
+ * Подрежда карти за визуализация: първо по цвят (спатия, каро, пика,
+ * купа), а вътре във всеки цвят - по сила, от най-силна към най-слаба,
  * съобразена с текущия договор (напр. при "Всичко коз" всеки цвят се
  * подрежда по козовия ред J,9,A,10,K,Q,8,7). Ако договорът все още не
  * е определен (по време на наддаването), се използва обикновеният ред
@@ -974,6 +992,20 @@ function contractTotalPoints(contract: Contract): number {
     return 16; // боя: 152 + 10, /10
 }
 
+/**
+ * Бонус "Капо" - отборът, който не взе НИТО ЕДНА взятка цялото
+ * раздаване (противникът взе всичките 8), плаща допълнителна
+ * "глоба", която отива у другия отбор върху обичайните му точки.
+ * При "Без коз" всички стойности в раздаването се удвояват, затова
+ * и бонусът е двоен: 18 бройки (180 т.) вместо 9 бройки (90 т.).
+ * Резултат: 26 (пълния ход) + 18 = 44 бр. при "Без коз",
+ * 26 + 9 = 35 бр. при "Всичко коз". Бонусът НЕ се умножава от
+ * контра/реконтра.
+ */
+function capoBonus(contract: Contract): number {
+    return contract === "NO_TRUMP" ? 18 : 9;
+}
+
 export function playCard(state: GameState, cardId: string, actingPlayerId?: number): GameState {
     if (state.finished || state.phase !== "playing" || state.trickComplete) {
         return state;
@@ -1126,10 +1158,11 @@ export function resolveTrick(state: GameState): GameState {
     const notCovered = roundPoints[declarerTeam] <= roundPoints[opponentTeam];
     const multiplierNote = multiplier > 1 ? ` (×${multiplier})` : "";
 
-    // Капо/валат: отборът, взел всички 8 взятки, получава
-    // допълнителни 90 точки (в скàла /10 това е точно +9),
-    // независимо от контра/реконтра (виж Wikipedia: "премията за
-    // валат не се удвоява/учетворява").
+    // "Капо": единият отбор не взе нито една взятка (другият взе
+    // всичките 8). Печелившият получава допълнителен бонус върху
+    // обичайните си точки - виж capoBonus() по-горе - независимо от
+    // контра/реконтра. Собствените анонси на "капо" отбора продължават
+    // да се броят за него (виж belot/announceBonus по-долу).
     const capoTeam: 0 | 1 | null =
         state.tricksCount[0] === 8 ? 0 :
         state.tricksCount[1] === 8 ? 1 : null;
@@ -1157,7 +1190,7 @@ export function resolveTrick(state: GameState): GameState {
         roundTotal[losingTeam] = -kertitsaPenalty + belot[losingTeam] + announceBonus[losingTeam];
 
         if (capoTeam !== null) {
-            roundTotal[capoTeam] += 9;
+            roundTotal[capoTeam] += capoBonus(contract);
         }
 
         const winnerAnnounceNote =
@@ -1166,7 +1199,7 @@ export function resolveTrick(state: GameState): GameState {
                 : "";
         const capoNote =
             capoTeam !== null
-                ? ` Валат: ${players.find((p) => p.team === capoTeam)?.name ?? "отборът"} +9 т.`
+                ? ` Капо: ${players.find((p) => p.team === capoTeam)?.name ?? "отборът"} +${capoBonus(contract)} т.`
                 : "";
 
         message =
@@ -1196,25 +1229,32 @@ export function resolveTrick(state: GameState): GameState {
             belot[declarerTeam] +
             announceBonus[declarerTeam];
 
-        const declarerAnnounceNote =
-            belot[declarerTeam] + announceBonus[declarerTeam] > 0
-                ? ` (анонсите му ${belot[declarerTeam] + announceBonus[declarerTeam]} т. отиват при противника)`
-                : "";
+        // Декларантът не взе НИТО ЕДНА взятка -> "Капо": противникът
+        // получава допълнителния бонус върху пълните точки на хода.
+        // Резултат: 44 т. при Без коз (26+18), 35 т. при Всичко коз (26+9).
+        if (capoTeam !== null) {
+            roundTotal[capoTeam] += capoBonus(contract);
+        }
+
         const opponentAnnounceNote =
             belot[opponentTeam] + announceBonus[opponentTeam] > 0
                 ? ` (+${belot[opponentTeam] + announceBonus[opponentTeam]} анонси)`
+                : "";
+        const capoNote =
+            capoTeam !== null
+                ? ` Капо: +${capoBonus(contract)} т. отгоре (общо ${handTotal + capoBonus(contract)} т.).`
                 : "";
 
         message =
             `${players[state.declarer as number].name} не покри договора — ` +
             `противникът взема ${handTotal} т.${opponentAnnounceNote}` +
             `${belot[declarerTeam] + announceBonus[declarerTeam] > 0 ? ` + анонсите на декларанта ${belot[declarerTeam] + announceBonus[declarerTeam]} т.` : ""}, ` +
-            `декларантът губи ${penalty} т.`;
+            `декларантът губи ${penalty} т.${capoNote}`;
     } else {
         roundTotal = [...roundPoints] as [number, number];
 
         if (capoTeam !== null) {
-            roundTotal[capoTeam] += 9;
+            roundTotal[capoTeam] += capoBonus(contract);
         }
 
         const bonusNote =
@@ -1224,7 +1264,7 @@ export function resolveTrick(state: GameState): GameState {
 
         const capoNote =
             capoTeam !== null
-                ? ` Валат: ${players.find((p) => p.team === capoTeam)?.name ?? "отборът"} +9 т.`
+                ? ` Капо: ${players.find((p) => p.team === capoTeam)?.name ?? "отборът"} +${capoBonus(contract)} т.`
                 : "";
 
         message =
@@ -1251,7 +1291,7 @@ export function resolveTrick(state: GameState): GameState {
     }
 
     const nextDealer = nextPlayer(state.dealer);
-    const next = startRound(nextDealer, score, state.round + 1);
+    const next = startRound(nextDealer, score, state.round + 1, state.humanSeat);
 
     return {
         ...next,
@@ -1266,7 +1306,7 @@ export function botMove(state: GameState): GameState {
 
     const player = state.players[state.currentPlayer];
 
-    if (player.id === 0) return state;
+    if (player.id === state.humanSeat) return state;
 
     const legalCards = player.hand.filter((card) =>
         canPlayCard(state, card)
