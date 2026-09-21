@@ -1,7 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { randomBytes } from "node:crypto";
-import { deal, placeCall, playCard, resolveTrick } from "../src/game/engine";
-import type { GameState } from "../src/types";
+import { deal, placeCall, playCard, resolveTrick } from "../src/game/engine.ts";
+import type { GameState } from "../src/types.ts";
 
 type Client = { ws: WebSocket; seat: number; name: string };
 type Room = { code: string; clients: Map<WebSocket, Client>; game: GameState; started: boolean };

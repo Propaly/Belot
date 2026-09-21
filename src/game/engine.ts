@@ -8,9 +8,9 @@ import type {
     Rank,
     Suit,
     TrickCard,
-} from "../types";
+} from "../types.ts";
 
-import { SUITS, createDeck, shuffle } from "./deck";
+import { SUITS, createDeck, shuffle } from "./deck.ts";
 
 const CARD_POINTS: Record<string, number> = {
     A: 11,

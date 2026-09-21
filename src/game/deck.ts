@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit } from "../types";
+import type { Card, Rank, Suit } from "../types.ts";
 
 export const SUITS: Suit[] = ["♠", "♥", "♦", "♣"];
 

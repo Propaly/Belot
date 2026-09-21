@@ -1,0 +1,10 @@
+services:
+  belot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: belot
+    ports:
+      - "4010:3000"
+      - "4011:8787"
+    restart: unless-stopped

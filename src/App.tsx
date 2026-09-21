@@ -88,7 +88,7 @@ function App() {
 
   function openOnline() {
     setError("");
-    const socket = new WebSocket(import.meta.env.VITE_WS_URL || `${location.protocol === "https:" ? "wss" : "ws"}://${location.hostname}:8787`);
+    const socket = new WebSocket(import.meta.env.VITE_WS_URL || (location.protocol === "https:" ? `wss://${location.host}` : `ws://${location.hostname}:8787`));
     socket.onmessage = event => {
       const msg = JSON.parse(event.data) as ServerMessage;
       if (msg.type === "room") { setOnlineCode(msg.code || ""); setSeat(msg.seat ?? 0); }
