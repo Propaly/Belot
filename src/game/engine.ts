@@ -561,27 +561,43 @@ function cardStrength(card: Card, contract: Contract): number {
     return NORMAL_ORDER[card.rank];
 }
 
-// Ред на показване на цветовете в ръката: спатия -> каро -> пика -> купа
-// (черно, червено, черно, червено - за по-лесна визуална различимост).
-const SUIT_DISPLAY_ORDER: Record<Suit, number> = {
-    "♣": 0,
-    "♦": 1,
-    "♠": 2,
-    "♥": 3,
-};
+// Ред на показване на боите в ръката: винаги редуваме черно/червено
+// (напр. ♠♥♣♦). При различен брой черни и червени започваме с цвета,
+// който е повече, за да няма два еднакви цвята един до друг, когато е
+// възможно (напр. ♥♠♦ вместо ♣♦♥).
+function suitOrderFor(hand: Card[]): Suit[] {
+    const present = new Set(hand.map((c) => c.suit));
+    const blacks = (["♠", "♣"] as Suit[]).filter((s) => present.has(s));
+    const reds = (["♥", "♦"] as Suit[]).filter((s) => present.has(s));
+    const order: Suit[] = [];
+    let wantBlack = blacks.length >= reds.length;
+
+    while (blacks.length || reds.length) {
+        const primary = wantBlack ? blacks : reds;
+        const fallback = wantBlack ? reds : blacks;
+        const next = primary.length ? primary.shift() : fallback.shift();
+        if (next) order.push(next);
+        wantBlack = !wantBlack;
+    }
+
+    return order;
+}
 
 /**
- * Подрежда карти за визуализация: първо по цвят (спатия, каро, пика,
- * купа), а вътре във всеки цвят - по сила, от най-силна към най-слаба,
+ * Подрежда карти за визуализация: първо по боя (в редуващ се черно-червен
+ * ред), а вътре във всяка боя - по сила, от най-силна към най-слаба,
  * съобразена с текущия договор (напр. при "Всичко коз" всеки цвят се
  * подрежда по козовия ред J,9,A,10,K,Q,8,7). Ако договорът все още не
  * е определен (по време на наддаването), се използва обикновеният ред
  * A,10,K,Q,J,9,8,7.
  */
 export function sortHand(hand: Card[], contract: Contract | null): Card[] {
+    const order = suitOrderFor(hand);
+    const rank = new Map(order.map((suit, i) => [suit, i]));
+
     return [...hand].sort((a, b) => {
         const suitDiff =
-            SUIT_DISPLAY_ORDER[a.suit] - SUIT_DISPLAY_ORDER[b.suit];
+            (rank.get(a.suit) ?? order.length) - (rank.get(b.suit) ?? order.length);
 
         if (suitDiff !== 0) return suitDiff;
 
@@ -912,6 +928,10 @@ function findKares(
     return result;
 }
 
+/**
+ * Връща ВСИЧКИ анонси на играча (те се стакират), с текст, боя и стойност -
+ * напр. "Терца ♠ (+2)", "Белот ♣ (+2)", "Кварта ♥ (+5)", "Каре J (+20)".
+ */
 export function getPlayerAnnouncements(
     state: GameState,
     playerId: number
@@ -924,48 +944,43 @@ export function getPlayerAnnouncements(
     // Без коз: само 4 аса = 400.
     if (state.contract === "NO_TRUMP") {
         const aces = hand.filter((c) => c.rank === "A").length;
-        return aces === 4 ? ["4× A = 400"] : [];
+        return aces === 4 ? ["4× A (+40)"] : [];
     }
 
-    type DisplayCandidate = { strength: number; label: string };
-    const candidates: DisplayCandidate[] = [];
+    type Entry = { value: number; label: string };
+    const entries: Entry[] = [];
+
+    // Белот: K + Q от коза (при "Всичко коз" - за всеки цвят поотделно).
+    const belotSuits: Suit[] =
+        state.contract === "ALL_TRUMP" ? SUITS : [state.contract];
+    belotSuits.forEach((suit) => {
+        const hasK = hand.some((c) => c.suit === suit && c.rank === "K");
+        const hasQ = hand.some((c) => c.suit === suit && c.rank === "Q");
+        if (hasK && hasQ) entries.push({ value: 2, label: `Белот ${suit} (+2)` });
+    });
 
     findSequences(hand, playerId, player.team).forEach((seq) => {
-        candidates.push({
-            strength: announcementStrength("sequence", seq.length, seq.highOrder),
-            label: seq.length === 3 ? "Терца" : seq.length === 4 ? "Кварта" : "Квинта",
-        });
+        const name =
+            seq.length === 3 ? "Терца" : seq.length === 4 ? "Кварта" : "Квинта";
+        const value = seq.value / 10;
+        entries.push({ value, label: `${name} ${seq.suit} (+${value})` });
     });
 
     findKares(hand, playerId, player.team).forEach((kare) => {
-        candidates.push({
-            strength: announcementStrength("kare", kare.value),
-            label: kare.rank === "J" && state.contract === "ALL_TRUMP" ? "4× J = 200" : "Каре",
-        });
+        const value = kare.value / 10;
+        entries.push({ value, label: `Каре ${kare.rank} (+${value})` });
     });
 
-    if (!candidates.length) return [];
-    candidates.sort((a, b) => b.strength - a.strength);
-    return [candidates[0].label];
+    entries.sort((a, b) => b.value - a.value);
+    return entries.map((e) => e.label);
 }
 
 /**
- * Изчислява бонуса от анонси (терца/кварта/квинта и каре) в началото
- * на раздаването. При игра "Без коз" анонси не се обявяват изобщо.
- * При равни по дължина поредици (или изобщо не по-висока поредица от
- * противника), само отборът с по-високия анонс записва премиите си -
- * другият отбор губи своите; при пълно равенство премиите отпадат за
- * всички. Същото важи поотделно и за каретата.
+ * Изчислява бонуса от анонси (белот, терца/кварта/квинта и каре).
+ * Анонсите СЕ СТАКИРАТ: всяка поредица/каре се добавя към отбора си,
+ * няма отменяне на по-слабите. При игра "Без коз" анонси няма, освен
+ * 4 аса (=400 т. -> 40 бройки).
  */
-function announcementStrength(kind: "sequence" | "kare", lengthOrValue: number, highOrder = 0): number {
-    // По договорка за тази версия на играта се зачита само един,
-    // най-силен анонс от всички налични в ръката/отбора.
-    if (kind === "kare") return 1000 + lengthOrValue;
-    // Карето е по-силно от всяка поредица. При поредиците: квинта >
-    // кварта > терца, а при еднаква дължина по-високата карта е по-силна.
-    return lengthOrValue * 100 + highOrder;
-}
-
 function computeAnnounceBonus(
     initialHands: Card[][],
     players: Player[],
@@ -982,60 +997,17 @@ function computeAnnounceBonus(
         return bonus;
     }
 
-    type Candidate = {
-        team: 0 | 1;
-        value: number;
-        strength: number;
-    };
-    const candidates: Candidate[] = [];
-
     initialHands.forEach((hand, playerId) => {
         const team = players[playerId].team;
-        const options: Candidate[] = [];
 
         findSequences(hand, playerId, team).forEach((seq) => {
-            options.push({
-                team,
-                value: seq.value,
-                strength: announcementStrength("sequence", seq.length, seq.highOrder),
-            });
+            bonus[team] += seq.value / 10; // 20/50/100 -> 2/5/10
         });
 
         findKares(hand, playerId, team).forEach((kare) => {
-            options.push({
-                team,
-                value: kare.value,
-                strength: announcementStrength("kare", kare.value),
-            });
+            bonus[team] += kare.value / 10; // 100/150/200 -> 10/15/20
         });
-
-        // От една ръка може да се запише само най-силният анонс.
-        if (options.length) {
-            options.sort((a, b) => b.strength - a.strength);
-            candidates.push(options[0]);
-        }
     });
-
-    if (!candidates.length) return bonus;
-
-    // Ако и двата отбора имат анонси, по-силният определя кой тип
-    // анонс печели. При равенство най-силните отпадат.
-    const bestStrength = Math.max(...candidates.map((c) => c.strength));
-    const strongest = candidates.filter((c) => c.strength === bestStrength);
-    if (strongest.length !== 1) return bonus;
-
-    const winningTeam = strongest[0].team;
-    const winningStrength = strongest[0].strength;
-
-    // Записват се само анонсите на победилия тип/сила от този отбор;
-    // така една ръка никога не дава едновременно каре и терца/кварта/квинта.
-    for (const candidate of candidates) {
-        if (candidate.team === winningTeam && candidate.strength === winningStrength) {
-            // Анонсите са в реални точки (20/50/100/150/200/400),
-            // но резултатът се записва в бройки (2/5/10/15/20/40).
-            bonus[winningTeam] += candidate.value / 10;
-        }
-    }
 
     return bonus;
 }
@@ -1330,7 +1302,8 @@ export function resolveTrick(state: GameState): GameState {
             roundPoints[1] === 0 ? 1 : null;
 
         if (zeroTeam !== null) {
-            roundTotal[zeroTeam] = -10;
+            // При "Без коз" всичко се удвоява, затова и санкцията е -20.
+            roundTotal[zeroTeam] = contract === "NO_TRUMP" ? -20 : -10;
         }
 
         const bonusNote =

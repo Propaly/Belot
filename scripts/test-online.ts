@@ -21,6 +21,7 @@ let nameStable = true;
 let actions = 0;
 let lastGame: GameState | null = null;
 let gatedOk = false;
+let initialCount = 0;
 
 const hardTimeout = setTimeout(() => {
   console.error("✗ ТАЙМАУТ: играта изглежда блокира (hang).");
@@ -34,7 +35,11 @@ function done(code: number, message: string) {
   process.exit(code);
 }
 
-ws.on("open", () => ws.send(JSON.stringify({ type: "create", name: "Тест", seat: 0 })));
+ws.on("open", async () => {
+  const before = (await fetch(`${api}/api/history`).then((r) => r.json())) as unknown[];
+  initialCount = Array.isArray(before) ? before.length : 0;
+  ws.send(JSON.stringify({ type: "create", name: "Тест", seat: 0 }));
+});
 
 ws.on("message", async (raw) => {
   const msg = JSON.parse(raw.toString());
@@ -63,10 +68,11 @@ ws.on("message", async (raw) => {
     // Даваме на сървъра да запише играта в SQLite.
     setTimeout(async () => {
       const history = await fetch(`${api}/api/history`).then((r) => r.json() as Promise<unknown[]>);
-      const saved = Array.isArray(history) && history.length > 0;
+      const count = Array.isArray(history) ? history.length : 0;
+      const saved = count === initialCount + 1; // точно ЕДИН нов запис (без дублиране)
       console.log(`  изиграни действия: ${actions}, раздавания: ${maxRound}`);
       console.log(`  ${nameStable ? "✓" : "✗"} името на играча остава "Тест" през цялата игра`);
-      console.log(`  ${saved ? "✓" : "✗"} завършената игра е записана в историята (${Array.isArray(history) ? history.length : 0} записа)`);
+      console.log(`  ${saved ? "✓" : "✗"} завършената игра е записана точно веднъж (${initialCount} -> ${count})`);
 
       if (!nameStable || !saved || !gatedOk) done(1, "\n✗ Онлайн тестът се провали.");
       done(0, "\nОнлайн тестът мина (без hang, имената са стабилни, играта е записана).");

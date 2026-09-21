@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Call, Card, GameState } from "./types";
 import { botBid, botMove, canPlayCard, chooseBid, chooseCard, contractLabel, deal, legalCalls, nextPlayer, placeCall, playCard, resolveTrick, getPlayerAnnouncements, sortHand } from "./game/engine";
 import History from "./History";
@@ -13,6 +13,10 @@ type ServerMessage = { type: string; code?: string; seat?: number; game?: GameSt
 function CardView({ card, playable, onClick }: { card: Card; playable: boolean; onClick: () => void }) {
   const red = card.suit === "♥" || card.suit === "♦";
   return <button className={`card ${red ? "red" : ""} ${playable ? "playable" : ""}`} onClick={onClick} disabled={!playable}><span>{card.rank}</span><span>{card.suit}</span></button>;
+}
+function MiniCard({ card }: { card: Card }) {
+  const red = card.suit === "♥" || card.suit === "♦";
+  return <span className={`mini-card ${red ? "red" : ""}`}>{card.rank}{card.suit}</span>;
 }
 // Показва обява/договор, като оцветява цветовете на боите (♥♦ червени),
 // за да се различават лесно от черните (♠♣) - иначе всички изглеждат
@@ -84,10 +88,13 @@ function App() {
   const [spectateStrategy, setSpectateStrategy] = useState<SpectateStrategy>("smart");
   const [spectateSpeed, setSpectateSpeed] = useState(220);
   const [spectateGames, setSpectateGames] = useState(1);
-  // Пазим последната завършена взятка, за да можем да я "преиграем" след
-  // като бъде изчистена от масата.
-  const [lastTrick, setLastTrick] = useState<GameState["trick"]>([]);
-  const [replayTrick, setReplayTrick] = useState<GameState["trick"] | null>(null);
+  // Пазим последната завършена взятка и история на последните до 8 взятки,
+  // за да могат да се прегледат веднага след като бъдат изиграни.
+  const [trickHistory, setTrickHistory] = useState<{ cards: GameState["trick"]; winner: 0 | 1 }[]>([]);
+  const [showTricks, setShowTricks] = useState(false);
+  const [trickReplayIndex, setTrickReplayIndex] = useState<number | null>(null);
+  const [playingTricks, setPlayingTricks] = useState(false);
+  const lastTrickCountRef = useRef(0);
   const [showHistory, setShowHistory] = useState(false);
 
   const actor = mode === "online" ? seat : game.humanSeat;
@@ -115,6 +122,10 @@ function App() {
   // затова маркираме този играч още докато се избира боя.
   const openingLeader = nextPlayer(game.dealer);
   const showFirstLead = game.phase === "bidding";
+
+  // Отборът на гледащия - за да е "Наши" винаги неговият отбор, а "Те" -
+  // противниковият (в онлайн всеки вижда себе си като "Наши").
+  const myTeam = game.players[actor]?.team ?? 0;
 
   useEffect(() => {
     if (mode !== "local" || game.phase !== "playing" || !game.trickComplete) return;
@@ -173,18 +184,41 @@ function App() {
 
   useEffect(() => () => ws?.close(), [ws]);
 
-  // Запомняме последната завършена взятка (4 карти), за да може да се
-  // преиграе и след като бъде изчистена от масата.
+  // Запомняме последните до 8 завършени взятки (закачени за брояча на
+  // взятките, за да не се дублират) и ги изчистваме при ново раздаване.
   useEffect(() => {
-    if (game.trickComplete && game.trick.length === 4) setLastTrick(game.trick);
-  }, [game.trickComplete, game.trick.length]);
+    if (game.phase === "bidding") {
+      setTrickHistory([]);
+      setTrickReplayIndex(null);
+      setPlayingTricks(false);
+      lastTrickCountRef.current = 0;
+      return;
+    }
+    if (!game.trickComplete || game.trick.length !== 4) return;
+    const completed = game.tricksCount[0] + game.tricksCount[1];
+    if (completed > lastTrickCountRef.current) {
+      lastTrickCountRef.current = completed;
+      const winner = (game.lastTrickWinnerTeam ?? 0) as 0 | 1;
+      setTrickHistory((prev) => [...prev, { cards: game.trick, winner }].slice(-8));
+    }
+  }, [game.phase, game.trickComplete, game.trick.length, game.tricksCount, game.lastTrickWinnerTeam, game.trick]);
 
-  // Повторението се показва за ~2.2s и изчезва автоматично.
+  // Анимирано превъртане през последните взятки.
   useEffect(() => {
-    if (!replayTrick) return;
-    const timer = setTimeout(() => setReplayTrick(null), 2200);
-    return () => clearTimeout(timer);
-  }, [replayTrick]);
+    if (!playingTricks || !trickHistory.length) return;
+    let i = 0;
+    setTrickReplayIndex(0);
+    const timer = setInterval(() => {
+      i += 1;
+      if (i >= trickHistory.length) {
+        clearInterval(timer);
+        setPlayingTricks(false);
+        return;
+      }
+      setTrickReplayIndex(i);
+    }, 1200);
+    return () => clearInterval(timer);
+  }, [playingTricks, trickHistory.length]);
 
   const bidRank = (call: Call) => ({ "♣":1, "♦":2, "♥":3, "♠":4, NO_TRUMP:5, ALL_TRUMP:6, PASS:0, CONTRA:0, RECONTRA:0 } as Record<Call,number>)[call];
 
@@ -210,7 +244,7 @@ function App() {
   function newGame() { if (mode === "online") send({type:"new_game"}); else setGame(deal(game.humanSeat)); }
   function startLocal(teamSeat: 0 | 1) { setGame(deal(teamSeat)); setMode("local"); setChoosingLocalTeam(false); }
   function startSpectate() { setGame(deal(0)); setSpectateGames(1); setMode("spectate"); }
-  function replayLastTrick() { if (lastTrick.length === 4) setReplayTrick(lastTrick); }
+  function toggleTricks() { setShowTricks((s) => !s); }
 
   const isBidding = game.phase === "bidding";
   const isHumanTurnToBid = mode !== "spectate" && isBidding && game.biddingTurn === actor;
@@ -238,8 +272,19 @@ function App() {
   const relativeSeat = (id: number) => (id - actor + 4) % 4;
 
   return <main className="table">
-    <header className="header"><h1>♠ БЕЛОТ</h1><div className="score"><span>Наши: <b>{formatScore(game.score[0])}</b></span><span>Те: <b>{formatScore(game.score[1])}</b></span>{mode === "online" && <span>Стая: <b>{onlineCode}</b> · {connected}/4</span>}<button className="header-btn" onClick={() => setShowHistory(true)}>🕘 История</button></div></header>
+    <header className="header"><h1>♠ БЕЛОТ</h1><div className="score">{mode === "spectate" ? <><span>Отбор 1: <b>{formatScore(game.score[0])}</b></span><span>Отбор 2: <b>{formatScore(game.score[1])}</b></span></> : <><span>Наши: <b>{formatScore(game.score[myTeam])}</b></span><span>Те: <b>{formatScore(game.score[1 - myTeam])}</b></span></>}{mode === "online" && <span>Стая: <b>{onlineCode}</b> · {connected}/4</span>}<button className="header-btn" onClick={() => setShowHistory(true)}>🕘 История</button></div></header>
     <section className="game-area">
+      {mode !== "spectate" && <>
+        <button className="replay-corner" onClick={toggleTricks} title="Последни взятки (до 8)">↻</button>
+        {showTricks && <div className="tricks-panel">
+          <div className="tricks-head"><b>Последни взятки</b><button className="close-x" onClick={()=>setShowTricks(false)}>✕</button></div>
+          <button className="team-button" onClick={()=>setPlayingTricks(true)} disabled={!trickHistory.length || playingTricks}>▶ Пусни повторение</button>
+          <div className="tricks-list">
+            {!trickHistory.length && <em>още няма изиграни взятки</em>}
+            {trickHistory.map((t,i)=><div key={i} className={`trick-row ${trickReplayIndex===i?"active":""}`} onClick={()=>{setTrickReplayIndex(i);setPlayingTricks(false);}}><span className="trick-row-idx">Взятка {i+1}</span><span className="trick-row-cards">{t.cards.map(tc=><MiniCard key={tc.card.id} card={tc.card}/>)}</span><span className="trick-row-team">Отбор {t.winner+1}</span></div>)}
+          </div>
+        </div>}
+      </>}
       {mode === "spectate" && <div className="spectate-panel">
         <div className="spectate-head"><span className="spectate-tag">ТЕСТ · игра #{spectateGames}</span><button className="spectate-btn stop" onClick={()=>setMode(null)}>Стоп</button></div>
         <div className="spectate-row"><span>Агенти:</span><button className={`spectate-btn ${spectateStrategy==="smart"?"on":""}`} onClick={()=>setSpectateStrategy("smart")}>Разумни</button><button className={`spectate-btn ${spectateStrategy==="chaos"?"on":""}`} onClick={()=>setSpectateStrategy("chaos")}>Хаос</button></div>
@@ -248,10 +293,9 @@ function App() {
       {[partnerSeat,leftSeat,rightSeat].map(id => <div key={id} className={`opponent ${id===partnerSeat?"top":id===leftSeat?"left":"right"} ${id===actingSeat?"active-turn":""}`}><div className="player-info"><Avatar icon={mode==="online"?"👤":"🤖"} onTurn={id===actingSeat} first={showFirstLead && id===openingLeader}/><strong>{playerLabels[id]}</strong><BidSlot entry={latestBids[id]} active={isBidding} bidKey={latestBidIndex[id]}/></div>{id===actingSeat && <small className="turn-label">На ход</small>}<AnnouncementList announcements={announcements[id]}/><div className={id===partnerSeat?"back-cards":"vertical-cards"}>{game.players[id].hand.map((_card,i)=><div className="back-card" key={i}>🂠</div>)}</div></div>)}
       <div className="center">
         {game.phase === "playing" && <div className="trick">{game.trick.map(played => <div key={played.card.id} className={`played-card seat-${relativeSeat(played.playerId)} ${(played.card.suit === "♥" || played.card.suit === "♦") ? "red" : ""}`}><span>{played.card.rank}</span><span>{played.card.suit}</span></div>)}</div>}
-        {replayTrick && <div className="replay-overlay"><div className="replay-label">↻ Повторение на последната взятка</div><div className="trick">{replayTrick.map(played => <div key={`replay-${played.card.id}`} className={`played-card seat-${relativeSeat(played.playerId)} ${(played.card.suit === "♥" || played.card.suit === "♦") ? "red" : ""}`}><span>{played.card.rank}</span><span>{played.card.suit}</span></div>)}</div></div>}
+        {showTricks && trickReplayIndex !== null && trickHistory[trickReplayIndex] && <div className="replay-overlay"><div className="replay-label">↻ Взятка {trickReplayIndex + 1} · Отбор {trickHistory[trickReplayIndex].winner + 1}</div><div className="trick">{trickHistory[trickReplayIndex].cards.map(played => <div key={`rep-${played.card.id}`} className={`played-card seat-${relativeSeat(played.playerId)} ${(played.card.suit === "♥" || played.card.suit === "♦") ? "red" : ""}`}><span>{played.card.rank}</span><span>{played.card.suit}</span></div>)}</div></div>}
         {isHumanTurnToBid && <div className="bid-panel">{availableBidOptions.map(call=><button key={call} className="bid-button" onClick={()=>handleBid(call)}><CallLabel call={call}/></button>)}</div>}
         <div className="message">{game.message}</div>
-        {lastTrick.length === 4 && <button className="replay-btn" onClick={replayLastTrick}>▶ Преиграй последната взятка</button>}
       </div>
       {game.phase === "playing" && <div className="contract contract-corner">Коз: <strong>{game.contract ? <CallLabel call={game.contract} /> : "—"}</strong>{game.multiplier>1 && <strong className="multiplier-badge"> ×{game.multiplier}</strong>}{game.declarer!==null && <div className="current-bid">Обявил: {playerLabels[game.declarer]}</div>}</div>}
       <div className={`player ${actor===actingSeat?"active-turn":""}`}><div className="hand">{sortedHumanHand.map(card=><CardView key={card.id} card={card} playable={isHumanTurnToPlay} onClick={()=>handleCard(card)}/>)}</div><div className="player-name"><div className="player-info"><Avatar icon={mode==="spectate"?"🤖":"👤"} onTurn={actor===actingSeat} first={showFirstLead && actor===openingLeader}/><strong>{playerLabels[actor]}</strong><BidSlot entry={latestBids[actor]} active={isBidding} bidKey={latestBidIndex[actor]}/></div>{isHumanTurnToPlay&&<small> — ТВОЙ ХОД</small>}{isHumanTurnToBid&&<small> — ТИ НАДДАВАШ</small>}</div><AnnouncementList announcements={announcements[actor]}/></div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Card, GameState } from "./types";
-import { placeCall, playCard, resolveTrick } from "./game/engine";
+import { getPlayerAnnouncements, placeCall, playCard, resolveTrick, sortHand } from "./game/engine";
 import { decodeGameLog } from "./game/notation";
 import {
     replayGame,
@@ -86,6 +86,9 @@ function SeatHand({ state, seat, name, active, declarer }: {
     active: boolean;
     declarer: boolean;
 }) {
+    const hand = sortHand(state.players[seat].hand, state.contract);
+    const announcements = state.phase === "playing" ? getPlayerAnnouncements(state, seat) : [];
+
     return (
         <div className={`rv-seat ${active ? "active" : ""}`}>
             <div className="rv-name">
@@ -94,8 +97,13 @@ function SeatHand({ state, seat, name, active, declarer }: {
                 {name}
             </div>
             <div className="rv-hand">
-                {state.players[seat].hand.map((c) => cardChip(c, `${seat}-${c.id}`))}
+                {hand.map((c) => cardChip(c, `${seat}-${c.id}`))}
             </div>
+            {announcements.length > 0 && (
+                <div className="rv-ann">
+                    {announcements.map((a, i) => <span key={i}>{a}</span>)}
+                </div>
+            )}
         </div>
     );
 }

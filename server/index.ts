@@ -10,7 +10,7 @@ import { getGame, listGames, saveGame } from "./db.ts";
 import type { GameState } from "../src/types.ts";
 
 type Client = { ws: WebSocket; seat: number; name: string };
-type Room = { code: string; clients: Map<WebSocket, Client>; game: GameState; started: boolean; recorder: GameRecorder };
+type Room = { code: string; clients: Map<WebSocket, Client>; game: GameState; started: boolean; recorder: GameRecorder; saved: boolean };
 const rooms = new Map<string, Room>();
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -132,6 +132,7 @@ function clientsBySeat(room: Room, seat: number) { return [...room.clients.value
 // завършване и при започване на нова игра, за да не се губи история.
 function persistRoom(room: Room) {
   if (!room.recorder.dealCount) return;
+  if (room.saved) return; // вече записана - няма двойни записи
 
   const players = [0, 1, 2, 3].map((seat) => {
     const c = clientsBySeat(room, seat);
@@ -151,6 +152,7 @@ function persistRoom(room: Room) {
       players,
       notation: encodeGameLog(room.recorder.log(`room ${room.code}`)),
     });
+    room.saved = true;
   } catch (err) {
     console.error("Неуспешен запис в историята:", err);
   }
@@ -251,7 +253,7 @@ wss.on("connection", ws => {
         const game = deal();
         const recorder = new GameRecorder(Date.now() >>> 0, 0);
         recorder.observe(game);
-        const room: Room = { code: code(), clients: new Map(), game, started: false, recorder };
+        const room: Room = { code: code(), clients: new Map(), game, started: false, recorder, saved: false };
         const seat = pickSeat(room, msg.seat) ?? 0;
         room.clients.set(ws, { ws, seat, name: String(msg.name || "Играч 1") });
         rooms.set(room.code, room);
@@ -269,10 +271,11 @@ wss.on("connection", ws => {
       const room = roomFor(ws); if (!room) return;
       const client = room.clients.get(ws)!;
       if (msg.type === "new_game") {
-        persistRoom(room);
+        persistRoom(room); // (no-op if already saved)
         room.game = deal();
         room.recorder = new GameRecorder(Date.now() >>> 0, 0);
         room.recorder.observe(room.game);
+        room.saved = false;
         broadcast(room); afterChange(room); return;
       }
       if (msg.type === "call") {

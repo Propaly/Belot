@@ -1,5 +1,5 @@
 import { createPlayers, resolveTrick } from "../src/game/engine.ts";
-import type { Contract, GameState, TrickCard } from "../src/types.ts";
+import type { Card, Contract, GameState, Rank, Suit, TrickCard } from "../src/types.ts";
 
 /**
  * Малък, dependency-free тест на точкуването. Пуска се с
@@ -22,6 +22,8 @@ const DUMMY_TRICK: TrickCard[] = [0, 1, 2, 3].map((playerId) => ({
     card: { id: `dummy-${playerId}`, suit: "♠", rank: "7" },
 }));
 
+const c = (suit: Suit, rank: Rank): Card => ({ id: `${suit}-${rank}`, suit, rank });
+
 function finishedRound(options: {
     contract: Contract;
     declarer: number;
@@ -29,6 +31,7 @@ function finishedRound(options: {
     tricksWon: [number, number];
     tricksCount: [number, number];
     lastWinnerTeam: 0 | 1;
+    initialHands?: Card[][];
 }): GameState {
     const players = createPlayers(0).map((p) => ({ ...p, hand: [] }));
 
@@ -44,7 +47,7 @@ function finishedRound(options: {
         passStreak: 0,
         contract: options.contract,
         declarer: options.declarer,
-        initialHands: [[], [], [], []],
+        initialHands: options.initialHands ?? [[], [], [], []],
         multiplier: options.multiplier,
         currentPlayer: options.lastWinnerTeam,
         trick: DUMMY_TRICK,
@@ -152,6 +155,70 @@ console.log("Непокрит договор");
     );
     check("декларантът губи 10", d[0], -10);
     check("противникът взема целия ход (16)", d[1], 16);
+}
+
+console.log("");
+console.log("Стакиращи се анонси");
+{
+    // Отбор 1 (седалки 1) има белот + 2 терци = 2 + 2 + 2 = 6 бонус.
+    // Избираме раздаване, в което декларантът покрива договора.
+    const initialHands: Card[][] = [
+        [],
+        [c("♣", "K"), c("♣", "Q"), c("♠", "7"), c("♠", "8"), c("♠", "9"), c("♥", "7"), c("♥", "8"), c("♥", "9")],
+        [],
+        [],
+    ];
+    const d = delta(
+        finishedRound({
+            contract: "♣",
+            declarer: 0,
+            multiplier: 1,
+            tricksWon: [120, 32],
+            tricksCount: [5, 3],
+            lastWinnerTeam: 0,
+            initialHands,
+        })
+    );
+    // Взятки 13:3 (130:32 след бонус за последна взятка) + 6 анонса за отбор 1.
+    check("белот + 2 терци = +6 за отбор 1", d[1], 3 + 6);
+}
+{
+    // Белот + кварта = 2 + 5 = 7.
+    const initialHands: Card[][] = [
+        [],
+        [c("♣", "K"), c("♣", "Q"), c("♠", "7"), c("♠", "8"), c("♠", "9"), c("♠", "10")],
+        [],
+        [],
+    ];
+    const d = delta(
+        finishedRound({
+            contract: "♣",
+            declarer: 0,
+            multiplier: 1,
+            tricksWon: [120, 32],
+            tricksCount: [5, 3],
+            lastWinnerTeam: 0,
+            initialHands,
+        })
+    );
+    check("белот + кварта = +7 за отбор 1", d[1], 3 + 7);
+}
+
+console.log("");
+console.log("Капо при 'Без коз'");
+{
+    const d = delta(
+        finishedRound({
+            contract: "NO_TRUMP",
+            declarer: 0,
+            multiplier: 1,
+            tricksWon: [120, 0],
+            tricksCount: [8, 0],
+            lastWinnerTeam: 0,
+        })
+    );
+    check("капо без коз: отборът с 0 точки = -20", d[1], -20);
+    check("капо без коз: печелившият = 26 + 18", d[0], 44);
 }
 
 if (failures > 0) {
