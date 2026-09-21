@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Генерирани отчети от симулациите (npm run sim)
+sim-reports
+# Снапшот на стария двигател за регресионния тест (npm run regress)
+.legacy
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

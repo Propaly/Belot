@@ -566,3 +566,131 @@ button {
   background: rgba(255,224,130,.22);
   color: #ffe082;
 }
+
+/* ===== Оцветяване на боите =====
+   ♥ и ♦ са червени навсякъде; ♠ и ♣ остават "черни", но на тъмните
+   бутони/панели се показват светли, за да не изчезват. Така обявата
+   до аватара вече ясно се разчита (червено срещу тъмно/светло). */
+.suit-red {
+  color: #e53935;
+}
+
+.suit-black {
+  color: #141414;
+}
+
+.bid-button .suit-black,
+.contract .suit-black {
+  color: #f5f5f5;
+}
+
+.bid-button .suit-red,
+.contract .suit-red {
+  color: #ff6b60;
+}
+
+/* ===== Първи ход след избора на коз =====
+   Златен пръстен и бадж "1" върху аватара на играча, който ще открие
+   играта. Показва се още по време на наддаването. */
+.avatar-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.avatar-wrap.is-first .avatar {
+  box-shadow: 0 0 0 3px #ffd54f, 0 0 14px 3px rgba(255, 213, 79, .7);
+}
+
+.first-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(150deg, #ffe082, #ffb300);
+  color: #3a2a00;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .45), 0 0 10px rgba(255, 213, 79, .9);
+  animation: firstPulse 1.3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes firstPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.25); }
+}
+
+/* ===== Тестов панел (spectate режим) ===== */
+.spectate-panel {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .4);
+  border: 1px solid rgba(255, 255, 255, .15);
+  font-size: 12px;
+  color: #dfe7e2;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+}
+
+.spectate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.spectate-tag {
+  font-weight: 800;
+  letter-spacing: .04em;
+  color: #69f0ae;
+}
+
+.spectate-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.spectate-row > span {
+  opacity: .75;
+  min-width: 52px;
+}
+
+.spectate-btn {
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.spectate-btn:hover {
+  background: rgba(255, 255, 255, .18);
+}
+
+.spectate-btn.on {
+  border-color: #ffd54f;
+  background: rgba(255, 213, 79, .22);
+  color: #ffe082;
+}
+
+.spectate-btn.stop {
+  border-color: rgba(255, 82, 82, .5);
+  color: #ff8c8c;
+}

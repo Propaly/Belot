@@ -395,14 +395,67 @@ function contractScore(hand: Card[], call: Call): number {
     return score;
 }
 
-export function botBid(state: GameState): GameState {
-    if (state.phase !== "bidding") return state;
+/**
+ * Връща всички обяви, които са легални за дадения играч в текущото
+ * състояние на наддаването. Ползва се както от UI (за бутоните), така
+ * и от ботовете/симулациите, за да не се дублира логиката на placeCall.
+ */
+export function legalCalls(state: GameState, seat: number): Call[] {
+    if (state.phase !== "bidding") return [];
 
-    const playerId = state.biddingTurn;
+    const player = state.players[seat];
+    const options: Call[] = [];
 
-    if (playerId === state.humanSeat) return state;
+    for (const option of CALL_OPTIONS) {
+        if (option === "PASS") continue;
 
-    const player = state.players[playerId];
+        if (option === "CONTRA") {
+            if (
+                state.highestBid &&
+                state.multiplier === 1 &&
+                state.players[state.highestBid.playerId].team !== player.team
+            ) {
+                options.push(option);
+            }
+            continue;
+        }
+
+        if (option === "RECONTRA") {
+            if (
+                state.highestBid &&
+                state.multiplier === 2 &&
+                state.players[state.highestBid.playerId].team === player.team
+            ) {
+                options.push(option);
+            }
+            continue;
+        }
+
+        // Обикновена обява трябва да е по-висока от текущата (или
+        // специалният случай "Без коз" върху "Без коз").
+        if (
+            state.highestBid &&
+            !(option === "NO_TRUMP" && state.highestBid.contract === "NO_TRUMP") &&
+            CONTRACT_RANK[option as Contract] <=
+                CONTRACT_RANK[state.highestBid.contract]
+        ) {
+            continue;
+        }
+
+        options.push(option);
+    }
+
+    options.push("PASS");
+    return options;
+}
+
+/**
+ * Чиста функция за решение на бот при наддаване. Изнесена е отделно
+ * от botBid(), за да може симулационната среда да я ползва за всяко
+ * място (вкл. "човешкото") без странични ефекти.
+ */
+export function chooseBid(state: GameState, seat: number): Call {
+    const player = state.players[seat];
     const hand = player.hand;
 
     // Реконтра: отборът на текущата обява може да реконтрира,
@@ -414,7 +467,7 @@ export function botBid(state: GameState): GameState {
     ) {
         const ownScore = contractScore(hand, state.highestBid.contract);
         if (ownScore >= 25) {
-            return placeCall(state, "RECONTRA");
+            return "RECONTRA";
         }
     }
 
@@ -428,7 +481,7 @@ export function botBid(state: GameState): GameState {
     ) {
         const opponentContractScore = contractScore(hand, state.highestBid.contract);
         if (opponentContractScore >= 25) {
-            return placeCall(state, "CONTRA");
+            return "CONTRA";
         }
     }
 
@@ -469,12 +522,19 @@ export function botBid(state: GameState): GameState {
 
     const alreadyThisContract = state.highestBid?.contract === best;
 
-    const call: Call =
-        bestScore >= PASS_THRESHOLD && !alreadyThisContract
-            ? best
-            : "PASS";
+    return bestScore >= PASS_THRESHOLD && !alreadyThisContract
+        ? best
+        : "PASS";
+}
 
-    return placeCall(state, call);
+export function botBid(state: GameState): GameState {
+    if (state.phase !== "bidding") return state;
+
+    const playerId = state.biddingTurn;
+
+    if (playerId === state.humanSeat) return state;
+
+    return placeCall(state, chooseBid(state, playerId), playerId);
 }
 
 export function cardPoints(card: Card, contract: Contract): number {
@@ -1174,20 +1234,24 @@ export function resolveTrick(state: GameState): GameState {
         // Контра/Реконтра: играе се на "всичко или нищо" - целият
         // рунд отива у отбора с ПОВЕЧЕ точки в тази ръка (без
         // значение кой е бил декларант), умножен ×2 (контра) или
-        // ×4 (реконтра). Губещият взима фиксирана кертица — -20 при
-        // контра, -40 при реконтра — вместо дела си от точките.
+        // ×4 (реконтра). Губещият получава точно отрицателна
+        // санкция = -10 × множителя (или -20 × множителя при "Без
+        // коз", където всичко се удвоява), БЕЗ да му се добавят
+        // собствените анонси/белот. Така при контра това е -20
+        // (боя) / -40 (без коз), а при реконтра -40 / -80.
         const winningTeam: 0 | 1 =
             roundPoints[0] > roundPoints[1] ? 0 :
             roundPoints[1] > roundPoints[0] ? 1 :
             opponentTeam;
         const losingTeam: 0 | 1 = winningTeam === 0 ? 1 : 0;
 
-        const kertitsaPenalty = multiplier === 4 ? 40 : 20;
+        const basePenalty = contract === "NO_TRUMP" ? 20 : 10;
+        const kertitsaPenalty = basePenalty * multiplier;
         const handTotal = contractTotalPoints(contract) * multiplier;
 
         roundTotal = [0, 0];
         roundTotal[winningTeam] = handTotal + belot[winningTeam] + announceBonus[winningTeam];
-        roundTotal[losingTeam] = -kertitsaPenalty + belot[losingTeam] + announceBonus[losingTeam];
+        roundTotal[losingTeam] = -kertitsaPenalty;
 
         if (capoTeam !== null) {
             roundTotal[capoTeam] += capoBonus(contract);
@@ -1257,6 +1321,18 @@ export function resolveTrick(state: GameState): GameState {
             roundTotal[capoTeam] += capoBonus(contract);
         }
 
+        // Правило "0 точки в раздаването": отбор, който завърши
+        // раздаването с НУЛА общо точки (взятки + белот + анонси),
+        // получава -10 вместо 0. На практика това се случва при
+        // "капо" - отборът без нито една взятка и без анонси.
+        const zeroTeam: 0 | 1 | null =
+            roundPoints[0] === 0 ? 0 :
+            roundPoints[1] === 0 ? 1 : null;
+
+        if (zeroTeam !== null) {
+            roundTotal[zeroTeam] = -10;
+        }
+
         const bonusNote =
             bonus[0] + bonus[1] > 0
                 ? ` (вкл. бонуси ${bonus[0]}:${bonus[1]})`
@@ -1267,9 +1343,14 @@ export function resolveTrick(state: GameState): GameState {
                 ? ` Капо: ${players.find((p) => p.team === capoTeam)?.name ?? "отборът"} +${capoBonus(contract)} т.`
                 : "";
 
+        const zeroNote =
+            zeroTeam !== null
+                ? ` Отборът без точки получава -10 т.`
+                : "";
+
         message =
             `Раздаването приключи: ${roundPoints[0]} : ${roundPoints[1]} т. → ` +
-            `${roundTotal[0]} : ${roundTotal[1]}${bonusNote}.${capoNote}`;
+            `${roundTotal[0]} : ${roundTotal[1]}${bonusNote}.${capoNote}${zeroNote}`;
     }
 
     const score: [number, number] = [
@@ -1299,6 +1380,23 @@ export function resolveTrick(state: GameState): GameState {
     };
 }
 
+/**
+ * Чиста функция за решение на бот при игра на карта - връща id-то на
+ * първата легална карта (или null, ако няма такава). Изнесена отделно,
+ * за да я ползват симулациите за всички места.
+ */
+export function chooseCard(state: GameState, seat: number = state.currentPlayer): string | null {
+    const player = state.players[seat];
+
+    const legalCards = player.hand.filter((card) =>
+        canPlayCard(state, card)
+    );
+
+    if (legalCards.length === 0) return null;
+
+    return legalCards[0].id;
+}
+
 export function botMove(state: GameState): GameState {
     if (state.finished || state.phase !== "playing") {
         return state;
@@ -1308,13 +1406,9 @@ export function botMove(state: GameState): GameState {
 
     if (player.id === state.humanSeat) return state;
 
-    const legalCards = player.hand.filter((card) =>
-        canPlayCard(state, card)
-    );
+    const cardId = chooseCard(state, player.id);
 
-    if (legalCards.length === 0) return state;
+    if (!cardId) return state;
 
-    const card = legalCards[0];
-
-    return playCard(state, card.id);
+    return playCard(state, cardId, player.id);
 }

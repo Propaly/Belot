@@ -8,7 +8,15 @@
   "dev:server": "tsx server/index.ts",
   "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
   "build": "vite build",
-  "preview": "vite preview"
+  "preview": "vite preview",
+  "sim": "tsx scripts/simulate.ts",
+  "sim:fuzz": "tsx scripts/simulate.ts --agents random --games 500",
+  "test:rules": "tsx scripts/test-rules.ts",
+  "test:notation": "tsx scripts/test-notation.ts",
+  "replay": "tsx scripts/replay.ts",
+  "regress": "tsx scripts/regress.ts",
+  "verify": "npm run typecheck && npm run test:rules && npm run test:notation && npm run replay -- --all --old",
+  "typecheck": "tsc -b"
 },
   "dependencies": {
     "react": "^19.0.0",
