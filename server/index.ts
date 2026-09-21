@@ -95,10 +95,24 @@ function code() { return randomBytes(3).toString("hex").toUpperCase(); }
 function send(ws: WebSocket, payload: unknown) { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload)); }
 function publicGameFor(room: Room, seat: number): GameState {
   const clone = structuredClone(room.game) as GameState;
+
+  // Анонсите (белот/терца/кварта...) са СКРИТИ, докато раздаването не
+  // приключи - иначе се "издават" пред противника. Затова маскираме
+  // началните ръце на другите седалки; собствената си ръка винаги се вижда.
+  const dealOver = clone.players.every((p) => p.hand.length === 0);
+  const hide = (c: { id: string }) => ({ id: c.id, suit: "♠" as const, rank: "7" as const });
+
   clone.players = clone.players.map((p) => ({
     ...p,
-    hand: p.id === seat ? p.hand : p.hand.map((c) => ({ id: c.id, suit: "♠", rank: "7" as const })),
+    hand: p.id === seat || dealOver ? p.hand : p.hand.map(hide),
   }));
+
+  if (!dealOver) {
+    clone.initialHands = clone.initialHands.map((hand, id) =>
+      id === seat ? hand : hand.map(hide)
+    );
+  }
+
   return clone;
 }
 

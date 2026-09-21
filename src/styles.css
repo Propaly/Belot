@@ -976,3 +976,8 @@ button {
   font-size: 10px;
   font-weight: 800;
 }
+
+/* Предишно раздаване: резюме и карти с име на играча. */
+.tricks-summary { font-size: 12px; opacity: .9; margin-bottom: 6px; color: #cfe8dc; }
+.trick-cell { display: inline-flex; align-items: center; gap: 3px; margin: 0 5px 2px 0; }
+.trick-cell b { font-size: 10px; opacity: .8; font-weight: 700; }

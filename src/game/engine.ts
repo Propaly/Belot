@@ -683,26 +683,31 @@ export function canPlayCard(state: GameState, card: Card): boolean {
     );
 
     if (hasLeadingSuit) {
-        if (card.suit !== leadingSuit) return false;
+        // Ако исканата боя не е коз (или сме на "Без коз") - задължително
+        // отговаряме с нея.
+        if (!leadIsTrump || contract === "NO_TRUMP") {
+            return card.suit === leadingSuit;
+        }
 
-        // При "Без коз" няма задължително качване. Ако например е
-        // изигран K от исканата боя, играчът може да даде всяка по-ниска
-        // карта от същата боя, стига да я има. При "Всичко коз" и при
-        // конкретен коз качването остава задължително.
-        if (leadIsTrump && contract !== "NO_TRUMP") {
-            const bestSoFar = Math.max(
-                ...state.trick
-                    .filter((t) => t.card.suit === leadingSuit)
-                    .map((t) => cardStrength(t.card, contract))
+        // Исканата боя Е коз. Ако можем да надцакаме коза на масата -
+        // задължително го правим. Ако НЕ можем (всичките ни козове са
+        // по-ниски), не сме длъжни да цакаме - може да изберем всяка
+        // карта, включително друг цвят.
+        const bestSoFar = Math.max(
+            ...state.trick
+                .filter((t) => t.card.suit === leadingSuit)
+                .map((t) => cardStrength(t.card, contract))
+        );
+
+        const canBeat = inLeadingSuit.some(
+            (c) => cardStrength(c, contract) > bestSoFar
+        );
+
+        if (canBeat) {
+            return (
+                card.suit === leadingSuit &&
+                cardStrength(card, contract) > bestSoFar
             );
-
-            const canBeat = inLeadingSuit.some(
-                (c) => cardStrength(c, contract) > bestSoFar
-            );
-
-            if (canBeat) {
-                return cardStrength(card, contract) > bestSoFar;
-            }
         }
 
         return true;
