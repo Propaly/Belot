@@ -694,3 +694,138 @@ button {
   border-color: rgba(255, 82, 82, .5);
   color: #ff8c8c;
 }
+
+/* ===== Повторение на последната взятка ===== */
+.replay-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .45);
+  border-radius: 16px;
+  animation: replayFade .25s ease-out;
+}
+
+.replay-label {
+  margin-bottom: 4px;
+  color: #ffe082;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: .03em;
+}
+
+@keyframes replayFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.replay-btn {
+  margin-top: 8px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 224, 130, .5);
+  border-radius: 999px;
+  background: rgba(255, 213, 79, .16);
+  color: #ffe082;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.replay-btn:hover {
+  background: rgba(255, 213, 79, .3);
+}
+
+/* ===== История и replay viewer ===== */
+.header-btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(255,255,255,.25);
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.header-btn:hover { background: rgba(255,255,255,.18); }
+
+.history-box {
+  width: min(1000px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: #10251b;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  text-align: left;
+}
+.history-head { display: flex; align-items: center; justify-content: space-between; }
+.history-head h2 { margin: 0 0 10px; }
+.history-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.history-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 10px;
+  background: rgba(255,255,255,.05);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.history-row:hover { background: rgba(255,255,255,.12); }
+.history-score { font-weight: 900; color: #ffe082; font-size: 16px; }
+.history-players { font-weight: 600; }
+.history-meta { font-size: 12px; opacity: .7; }
+
+.replay-viewer { margin-top: 8px; }
+.rv-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.rv-step-label { font-weight: 800; color: #69f0ae; }
+.rv-step-count { font-size: 12px; opacity: .7; }
+.rv-layout { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+.rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rv-seat {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.rv-seat.active { border-color: #4caf50; box-shadow: 0 0 0 1px rgba(76,175,80,.5); }
+.rv-name { font-size: 12px; font-weight: 800; margin-bottom: 4px; }
+.rv-hand { display: flex; flex-wrap: wrap; gap: 3px; }
+.rv-card {
+  padding: 3px 5px;
+  border-radius: 5px;
+  background: #fff;
+  color: #111;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+.rv-card.red { color: #c62828; }
+.rv-center { margin-top: 12px; text-align: center; }
+.rv-contract { font-size: 13px; margin-bottom: 8px; }
+.rv-trick { display: flex; justify-content: center; gap: 6px; min-height: 24px; }
+.rv-side { border-left: 1px solid rgba(255,255,255,.12); padding-left: 14px; }
+.rv-side h3 { margin: 0 0 8px; font-size: 14px; }
+.rv-deal {
+  padding: 7px 9px;
+  margin-bottom: 7px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.05);
+  font-size: 12px;
+}
+.rv-deal-head { font-weight: 800; }
+.rv-deal-pts { opacity: .9; margin: 2px 0; }
+.rv-deal-ann { color: #ffe082; }
+.rv-controls { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.rv-controls .team-button { flex: 0 0 auto; min-width: 46px; }
+
+@media (max-width: 800px) {
+  .rv-layout { grid-template-columns: 1fr; }
+  .rv-side { border-left: 0; padding-left: 0; }
+  .history-row { grid-template-columns: 1fr; }
+}

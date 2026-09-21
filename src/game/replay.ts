@@ -7,6 +7,7 @@ import type {
     Rank,
     Suit,
 } from "../types.ts";
+import { getPlayerAnnouncements } from "./engine.ts";
 
 /**
  * ================== Replay / история на игри ==================
@@ -188,9 +189,31 @@ export type DealOutcome = {
     scoreBefore: [number, number];
     scoreAfter: [number, number];
     roundTotal: [number, number];
+    /** Данни за преглед: договор, анонси (терца/кварта/квинта, каре) и точки. */
+    review: DealReview;
     /** Хеш на развитието на играта (без точки) - за сравнение старо/ново. */
     checksum: string;
     steps: number;
+};
+
+export type DealReview = {
+    contract: Contract | null;
+    declarer: number | null;
+    multiplier: 1 | 2 | 4;
+    /** Етикети на анонсите на всеки играч (напр. "Терца", "Квинта", "Каре"). */
+    announcements: string[][];
+    /** Точки от взятки (сурови, преди закръгляне) по отбори. */
+    tricksWon: [number, number];
+    tricksCount: [number, number];
+};
+
+const emptyReview: DealReview = {
+    contract: null,
+    declarer: null,
+    multiplier: 1,
+    announcements: [[], [], [], []],
+    tricksWon: [0, 0],
+    tricksCount: [0, 0],
 };
 
 const zero: [number, number] = [0, 0];
@@ -207,6 +230,7 @@ export function replayDeal(deal: DealLog, engine: ReplayEngine): DealOutcome {
         scoreBefore: deal.scoreBefore,
         scoreAfter: [...state.score] as [number, number],
         roundTotal: [...zero] as [number, number],
+        review: emptyReview,
         checksum: hashSignatures(hashes),
         steps: hashes.length,
     });
@@ -221,6 +245,7 @@ export function replayDeal(deal: DealLog, engine: ReplayEngine): DealOutcome {
                 scoreBefore: deal.scoreBefore,
                 scoreAfter: [...state.score] as [number, number],
                 roundTotal: [...zero] as [number, number],
+                review: emptyReview,
                 checksum: hashSignatures(hashes),
                 steps: hashes.length,
             };
@@ -256,6 +281,17 @@ export function replayDeal(deal: DealLog, engine: ReplayEngine): DealOutcome {
         hashes.push(stateSignature(state));
     }
 
+    // Данните за преглед (анонси/точки) се взимат преди последния resolve,
+    // защото след него състоянието вече е ново (случайно) раздаване.
+    const review: DealReview = {
+        contract: state.contract,
+        declarer: state.declarer,
+        multiplier: state.multiplier,
+        announcements: state.players.map((_, i) => getPlayerAnnouncements(state, i)),
+        tricksWon: [...state.tricksWon] as [number, number],
+        tricksCount: [...state.tricksCount] as [number, number],
+    };
+
     if (state.trickComplete) {
         // НЕ хешираме състоянието след последния resolve - то вече е нова
         // (случайна) ръка; точките обаче са това, което ни трябва.
@@ -273,6 +309,7 @@ export function replayDeal(deal: DealLog, engine: ReplayEngine): DealOutcome {
             scoreAfter[0] - deal.scoreBefore[0],
             scoreAfter[1] - deal.scoreBefore[1],
         ],
+        review,
         checksum: hashSignatures(hashes),
         steps: hashes.length,
     };
@@ -327,3 +364,54 @@ export function summarizeGameLog(log: GameLog): string {
     const hand = log.deals[0]?.hands[0]?.join(" ") ?? "—";
     return `${deals} раздавания, ${plays} хода, seed=${log.seed}, първа ръка: ${hand}`;
 }
+
+export type ReplayStep = {
+    state: GameState;
+    label: string;
+    dealIndex: number;
+};
+
+/**
+ * Разгъва цялата игра в списък от състояния (по едно след всяко действие) -
+ * за UI replay viewer със стъпване напред/назад.
+ */
+export function replayStates(log: GameLog, engine: ReplayEngine): ReplayStep[] {
+    const steps: ReplayStep[] = [];
+    const push = (state: GameState, label: string, dealIndex: number) => {
+        steps.push({ state: structuredClone(state), label, dealIndex });
+    };
+
+    for (let d = 0; d < log.deals.length; d++) {
+        const deal = log.deals[d];
+        let state = buildBiddingState(deal);
+        push(state, `Раздаване ${deal.round} — начало`, d);
+
+        for (const b of deal.bidding) {
+            if (!state.highestBid && state.passStreak === 3 && b.call === "PASS") break;
+            state = engine.placeCall(state, b.call, b.seat);
+            push(state, `Обява: играч ${b.seat + 1} — ${b.call}`, d);
+        }
+
+        if (state.phase !== "playing") continue;
+
+        for (const p of deal.plays) {
+            if (state.trickComplete) {
+                state = engine.resolveTrick(state);
+                push(state, "Край на взятка", d);
+            }
+            state = engine.playCard(state, p.cardId, p.seat);
+            push(state, `Ход: играч ${p.seat + 1} — ${p.cardId}`, d);
+        }
+
+        push(
+            state,
+            deal.result
+                ? `Край на раздаване (${deal.result.roundTotal[0]}:${deal.result.roundTotal[1]})`
+                : "Край на раздаване",
+            d
+        );
+    }
+
+    return steps;
+}
+

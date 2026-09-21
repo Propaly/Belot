@@ -27,3 +27,7 @@ sim-reports
 *.njsproj
 *.sln
 *.sw?
+
+# SQLite история на игрите (server)
+belot-history.db
+belot-history.db-*

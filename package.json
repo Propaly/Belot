@@ -13,6 +13,8 @@
   "sim:fuzz": "tsx scripts/simulate.ts --agents random --games 500",
   "test:rules": "tsx scripts/test-rules.ts",
   "test:notation": "tsx scripts/test-notation.ts",
+  "test:history": "tsx scripts/test-history.ts",
+  "test:online": "tsx scripts/test-online.ts",
   "replay": "tsx scripts/replay.ts",
   "regress": "tsx scripts/regress.ts",
   "verify": "npm run typecheck && npm run test:rules && npm run test:notation && npm run replay -- --all --old",
