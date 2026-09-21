@@ -19,6 +19,8 @@ let mySeat = 0;
 let maxRound = 1;
 let nameStable = true;
 let actions = 0;
+let lastGame: GameState | null = null;
+let gatedOk = false;
 
 const hardTimeout = setTimeout(() => {
   console.error("✗ ТАЙМАУТ: играта изглежда блокира (hang).");
@@ -36,10 +38,21 @@ ws.on("open", () => ws.send(JSON.stringify({ type: "create", name: "Тест", s
 
 ws.on("message", async (raw) => {
   const msg = JSON.parse(raw.toString());
-  if (msg.type === "room") { mySeat = msg.seat; return; }
+  if (msg.type === "room") {
+    mySeat = msg.seat;
+
+    // Проверка: ПРЕДИ старт ботовете не бива да играят - играта чака хора.
+    setTimeout(() => {
+      gatedOk = !!lastGame && lastGame.bidHistory.length === 0 && lastGame.round === 1;
+      console.log(`  ${gatedOk ? "✓" : "✗"} преди старт няма изиграни обяви (чака играчи)`);
+      ws.send(JSON.stringify({ type: "start" }));
+    }, 1500);
+    return;
+  }
   if (msg.type !== "state" || !msg.game) return;
 
   const game = msg.game as GameState;
+  lastGame = game;
 
   if (game.players[mySeat]?.name !== "Тест") {
     nameStable = false;
@@ -55,7 +68,7 @@ ws.on("message", async (raw) => {
       console.log(`  ${nameStable ? "✓" : "✗"} името на играча остава "Тест" през цялата игра`);
       console.log(`  ${saved ? "✓" : "✗"} завършената игра е записана в историята (${Array.isArray(history) ? history.length : 0} записа)`);
 
-      if (!nameStable || !saved) done(1, "\n✗ Онлайн тестът се провали.");
+      if (!nameStable || !saved || !gatedOk) done(1, "\n✗ Онлайн тестът се провали.");
       done(0, "\nОнлайн тестът мина (без hang, имената са стабилни, играта е записана).");
     }, 1000);
     return;

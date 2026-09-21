@@ -184,6 +184,12 @@ function afterChange(room: Room) {
     return;
   }
 
+  // Не включваме ботове, преди хората да са влезли - играта просто чака
+  // играчите. Ботовете се активират едва след като стаята е стартирала
+  // (всичките 4 седалки са заети или е получен "start"), за да не се
+  // изиграе сама, докато никой още не е влязъл.
+  if (!room.started) return;
+
   const code = room.code;
 
   if (room.game.trickComplete) {
@@ -257,6 +263,7 @@ wss.on("connection", ws => {
         const seat = pickSeat(room, msg.seat);
         if (seat === undefined) return send(ws, { type: "error", message: "Стаята е пълна." });
         room.clients.set(ws, { ws, seat, name: String(msg.name || `Играч ${seat+1}`) });
+        if (room.clients.size === 4) room.started = true; // всички седнаха - играта започва
         send(ws, { type: "room", code: room.code, seat }); broadcast(room); afterChange(room); return;
       }
       const room = roomFor(ws); if (!room) return;
@@ -283,7 +290,7 @@ wss.on("connection", ws => {
         broadcast(room); afterChange(room);
         return;
       }
-      if (msg.type === "start") { room.started = true; broadcast(room); return; }
+      if (msg.type === "start") { room.started = true; broadcast(room); afterChange(room); return; }
     } catch { send(ws, { type: "error", message: "Невалидна заявка." }); }
   });
   ws.on("close", () => {
