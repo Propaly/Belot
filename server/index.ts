@@ -41,11 +41,14 @@ const httpServer = createServer(async (req, res) => {
 
     // ---- История (SQLite) API ----
     if (pathname === "/api/history") {
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 30)));
+      const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+      const from = url.searchParams.get("from") ?? undefined;
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
       });
-      res.end(JSON.stringify(listGames(50)));
+      res.end(JSON.stringify(listGames(limit, offset, from || undefined)));
       return;
     }
     if (pathname.startsWith("/api/history/")) {

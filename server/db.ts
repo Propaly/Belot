@@ -86,15 +86,20 @@ export function saveGame(input: GameInput): number {
     return Number(info.lastInsertRowid);
 }
 
-export function listGames(limit = 50): GameListItem[] {
+export function listGames(limit = 50, offset = 0, fromIso?: string): GameListItem[] {
+    const columns = `id, room_code, created_at, finished_at, rounds, score0, score1, winner, players`;
+    const where = fromIso ? `WHERE created_at >= ?` : "";
+    const params: (string | number)[] = fromIso ? [fromIso] : [];
+
     const rows = db
         .prepare(`
-          SELECT id, room_code, created_at, finished_at, rounds, score0, score1, winner, players
+          SELECT ${columns}
           FROM games
+          ${where}
           ORDER BY id DESC
-          LIMIT ?
+          LIMIT ? OFFSET ?
         `)
-        .all(limit) as Record<string, unknown>[];
+        .all(...params, limit, offset) as Record<string, unknown>[];
 
     return rows.map(rowToItem);
 }

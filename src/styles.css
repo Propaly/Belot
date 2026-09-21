@@ -829,3 +829,71 @@ button {
   .rv-side { border-left: 0; padding-left: 0; }
   .history-row { grid-template-columns: 1fr; }
 }
+
+/* ===== История: филтри и timeline ===== */
+.close-x { background: transparent; border: 0; color: #fff; font-size: 20px; cursor: pointer; }
+.history-filters { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.history-day {
+  margin: 12px 0 4px;
+  font-weight: 800;
+  color: #69f0ae;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.rv-timeline { margin: 4px 0 14px; }
+.rv-slider { width: 100%; accent-color: #4caf50; }
+.rv-track {
+  position: relative;
+  height: 10px;
+  margin: 4px 0 0;
+  border-radius: 5px;
+  background: rgba(255,255,255,.1);
+}
+.rv-marker {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-left: -5px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.5);
+}
+.rv-marker:hover { transform: translateY(-50%) scale(1.35); }
+.kind-deal { background: #90a4ae; }
+.kind-contract { background: #4caf50; }
+.kind-announce { background: #ffd54f; }
+.kind-contra { background: #ff5252; }
+.kind-capo { background: #ba68c8; }
+.kind-end { background: #42a5f5; }
+
+.rv-highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow: auto;
+  margin-bottom: 12px;
+}
+.rv-hl {
+  text-align: left;
+  padding: 3px 7px;
+  border: 0;
+  border-left: 3px solid #90a4ae;
+  border-radius: 4px;
+  background: rgba(255,255,255,.05);
+  color: #e6efe9;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rv-hl:hover { background: rgba(255,255,255,.12); }
+.rv-hl.active { background: rgba(105,240,174,.18); }
+.rv-hl.kind-contract { border-left-color: #4caf50; }
+.rv-hl.kind-announce { border-left-color: #ffd54f; }
+.rv-hl.kind-contra { border-left-color: #ff5252; }
+.rv-hl.kind-capo { border-left-color: #ba68c8; }
+.rv-hl.kind-end { border-left-color: #42a5f5; }
